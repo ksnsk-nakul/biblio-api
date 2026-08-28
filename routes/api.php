@@ -9,7 +9,7 @@ use App\Http\Controllers\ReadingProgressController;
 use App\Http\Controllers\ShelfController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
 
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
@@ -28,7 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/books/{book}/file', [BookController::class, 'file']);
     Route::get('/books/{book}/cover', [BookController::class, 'cover'])->name('books.cover');
     Route::post('/books/{book}/embed', [BookController::class, 'embed']);
-    Route::post('/books/{book}/chat', [BookController::class, 'chat']);
+    Route::post('/books/{book}/chat', [BookController::class, 'chat'])->middleware('throttle:20,1');
 
     Route::get('/books/{book}/progress', [ReadingProgressController::class, 'show']);
     Route::patch('/books/{book}/progress', [ReadingProgressController::class, 'update']);

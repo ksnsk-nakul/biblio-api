@@ -19,6 +19,9 @@ class BookResource extends JsonResource
             'cover_url' => $this->cover_path ? route('books.cover', $this->id, absolute: false) : null,
             'chapter_count' => $this->chapter_count,
             'embedding_status' => $this->embedding_status,
+            'on_shelf' => $this->when($request->user(), fn () => array_key_exists('on_shelf', $this->getAttributes())
+                ? (bool) $this->getAttributes()['on_shelf']
+                : $this->shelves()->where('user_id', $request->user()->id)->exists()),
             'folder' => $this->whenLoaded('folder', fn () => new FolderResource($this->folder)),
             'chapters' => BookChapterResource::collection($this->whenLoaded('chapters')),
             'created_at' => $this->created_at,

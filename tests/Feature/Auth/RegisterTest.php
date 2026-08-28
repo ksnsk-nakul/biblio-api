@@ -1,6 +1,11 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\RateLimiter;
+
+beforeEach(function () {
+    RateLimiter::clear('register');
+});
 
 it('registers a new user and establishes a session', function () {
     $response = $this->postJson('/api/register', [
@@ -39,4 +44,21 @@ it('rejects registration with a duplicate email', function () {
     $response->assertStatus(422);
     $response->assertJsonValidationErrors(['email']);
     $this->assertDatabaseCount('users', 1);
+});
+
+it('throttles repeated rapid registration attempts', function () {
+    $payload = [
+        'name' => 'Spammer',
+        'email' => 'spammer@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'mismatched',
+    ];
+
+    for ($i = 0; $i < 6; $i++) {
+        $response = $this->postJson('/api/register', $payload);
+        $response->assertStatus(422);
+    }
+
+    $response = $this->postJson('/api/register', $payload);
+    $response->assertStatus(429);
 });

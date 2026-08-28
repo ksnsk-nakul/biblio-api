@@ -4,9 +4,11 @@ use App\Models\Book;
 use App\Models\BookChunk;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
+    RateLimiter::clear('books-chat');
 });
 
 it('rejects chat when the book is not ready for embedding', function () {
@@ -53,4 +55,21 @@ it('streams a chat response for a ready book, never calling the real OpenAI API'
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'embeddings'));
     Http::assertSent(fn ($request) => str_contains($request->url(), 'chat/completions'));
+});
+
+it('throttles repeated rapid chat requests', function () {
+    $book = Book::factory()->create(['embedding_status' => 'processing']);
+
+    for ($i = 0; $i < 20; $i++) {
+        $response = $this->actingAs($this->user)->postJson("/api/books/{$book->id}/chat", [
+            'message' => 'What happens in chapter one?',
+        ]);
+        $response->assertStatus(422);
+    }
+
+    $response = $this->actingAs($this->user)->postJson("/api/books/{$book->id}/chat", [
+        'message' => 'What happens in chapter one?',
+    ]);
+
+    $response->assertStatus(429);
 });

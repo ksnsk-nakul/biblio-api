@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 
 class GoogleAuthController extends Controller
@@ -23,7 +24,13 @@ class GoogleAuthController extends Controller
     {
         $googleUser = Socialite::driver('google')->stateless()->user();
 
-        $user = $findOrCreateGoogleUser->execute($googleUser);
+        try {
+            $user = $findOrCreateGoogleUser->execute($googleUser);
+        } catch (ValidationException) {
+            return redirect()->away(
+                config('bibliocon.frontend_url').'?auth_error=email_already_registered'
+            );
+        }
 
         Auth::login($user, true);
         $request->session()->regenerate();

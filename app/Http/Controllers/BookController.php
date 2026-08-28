@@ -29,6 +29,7 @@ class BookController extends Controller
     public function index(Request $request)
     {
         $query = Book::query()->with('folder');
+        $this->withOnShelf($query, $request);
 
         if ($request->filled('folder_id')) {
             $query->where('folder_id', $request->input('folder_id'));
@@ -41,9 +42,13 @@ class BookController extends Controller
         return BookResource::collection($query->latest()->paginate(20));
     }
 
-    public function show(Book $book): BookResource
+    public function show(Book $book, Request $request): BookResource
     {
         $book->load(['folder', 'chapters']);
+
+        if ($user = $request->user()) {
+            $book->loadExists(['shelves as on_shelf' => fn ($q) => $q->where('user_id', $user->id)]);
+        }
 
         return new BookResource($book);
     }
@@ -87,6 +92,7 @@ class BookController extends Controller
         $term = trim((string) $request->query('q', ''));
 
         $query = Book::query()->with('folder');
+        $this->withOnShelf($query, $request);
 
         if ($term !== '') {
             $like = '%'.$term.'%';
@@ -184,6 +190,18 @@ class BookController extends Controller
             'X-Accel-Buffering' => 'no',
             'Connection' => 'keep-alive',
         ]);
+    }
+
+    /**
+     * Annotate a books query with an `on_shelf` exists-subquery for the
+     * authenticated user, so BookResource can expose it without an N+1
+     * query per row on paginated catalog/search results.
+     */
+    protected function withOnShelf(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
+    {
+        if ($user = $request->user()) {
+            $query->withExists(['shelves as on_shelf' => fn ($q) => $q->where('user_id', $user->id)]);
+        }
     }
 
     protected function flushOutput(): void
