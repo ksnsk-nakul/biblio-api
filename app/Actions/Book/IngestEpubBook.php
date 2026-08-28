@@ -60,6 +60,80 @@ class IngestEpubBook
         });
     }
 
+    /**
+     * Best-effort peek at the series name for a not-yet-ingested epub, so
+     * callers (e.g. the bulk import job) can decide where to place the book
+     * before running the full parse/ingest via execute(). Never throws;
+     * returns null if the series can't be determined or the file can't be
+     * read.
+     */
+    public function peekSeriesName(string $realPath, string $originalFilename): ?string
+    {
+        $zip = new ZipArchive();
+
+        if ($zip->open($realPath) !== true) {
+            return null;
+        }
+
+        try {
+            $located = $this->locateOpf($zip);
+
+            if ($located === null) {
+                [$seriesName] = $this->extractSeriesFromFilename($originalFilename);
+
+                return $seriesName;
+            }
+
+            [$seriesName] = $this->extractSeriesFromOpf($located['opf']);
+
+            if ($seriesName === null) {
+                [$seriesName] = $this->extractSeriesFromFilename($originalFilename);
+            }
+
+            return $seriesName;
+        } catch (\Throwable) {
+            return null;
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /**
+     * @return array{opf: SimpleXMLElement, dir: string}|null
+     */
+    protected function locateOpf(ZipArchive $zip): ?array
+    {
+        $containerXml = $zip->getFromName('META-INF/container.xml');
+
+        if (! $containerXml) {
+            return null;
+        }
+
+        $container = $this->loadXml($containerXml);
+        $container->registerXPathNamespace('c', 'urn:oasis:names:tc:opendocument:xmlns:container');
+        $rootfiles = $container->xpath('//c:rootfile[@full-path]');
+
+        if (empty($rootfiles)) {
+            return null;
+        }
+
+        $opfPath = (string) $rootfiles[0]['full-path'];
+        $opfXmlRaw = $zip->getFromName($opfPath);
+
+        if (! $opfXmlRaw) {
+            return null;
+        }
+
+        $opf = $this->loadXml($opfXmlRaw);
+        $opf->registerXPathNamespace('opf', 'http://www.idpf.org/2007/opf');
+        $opf->registerXPathNamespace('dc', 'http://purl.org/dc/elements/1.1/');
+
+        $opfDir = dirname($opfPath);
+        $opfDir = $opfDir === '.' ? '' : $opfDir;
+
+        return ['opf' => $opf, 'dir' => $opfDir];
+    }
+
     protected function parseEpub(string $path, string $originalFilename, string $hash): array
     {
         $zip = new ZipArchive();
@@ -71,39 +145,16 @@ class IngestEpubBook
         }
 
         try {
-            $containerXml = $zip->getFromName('META-INF/container.xml');
+            $located = $this->locateOpf($zip);
 
-            if (! $containerXml) {
+            if ($located === null) {
                 throw ValidationException::withMessages([
-                    'file' => 'The epub is missing META-INF/container.xml.',
+                    'file' => 'The epub is missing META-INF/container.xml or its OPF package file.',
                 ]);
             }
 
-            $container = $this->loadXml($containerXml);
-            $container->registerXPathNamespace('c', 'urn:oasis:names:tc:opendocument:xmlns:container');
-            $rootfiles = $container->xpath('//c:rootfile[@full-path]');
-
-            if (empty($rootfiles)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Could not locate the OPF package file inside the epub.',
-                ]);
-            }
-
-            $opfPath = (string) $rootfiles[0]['full-path'];
-            $opfXmlRaw = $zip->getFromName($opfPath);
-
-            if (! $opfXmlRaw) {
-                throw ValidationException::withMessages([
-                    'file' => 'Could not read the OPF package file inside the epub.',
-                ]);
-            }
-
-            $opf = $this->loadXml($opfXmlRaw);
-            $opf->registerXPathNamespace('opf', 'http://www.idpf.org/2007/opf');
-            $opf->registerXPathNamespace('dc', 'http://purl.org/dc/elements/1.1/');
-
-            $opfDir = dirname($opfPath);
-            $opfDir = $opfDir === '.' ? '' : $opfDir;
+            $opf = $located['opf'];
+            $opfDir = $located['dir'];
 
             $title = $this->firstXpathValue($opf, '//dc:title') ?? pathinfo($originalFilename, PATHINFO_FILENAME);
             $author = $this->firstXpathValue($opf, '//dc:creator') ?? 'Unknown';

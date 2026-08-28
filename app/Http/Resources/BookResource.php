@@ -19,6 +19,7 @@ class BookResource extends JsonResource
             'cover_path' => $this->cover_path,
             'chapter_count' => $this->chapter_count,
             'embedding_status' => $this->embedding_status,
+            'folder' => $this->whenLoaded('folder', fn () => new FolderResource($this->folder)),
             'chapters' => BookChapterResource::collection($this->whenLoaded('chapters')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
