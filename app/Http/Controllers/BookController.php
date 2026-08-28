@@ -4,17 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Actions\Book\DeleteBook;
 use App\Actions\Book\IngestEpubBook;
+use App\Actions\Book\RetrieveBookChunks;
+use App\Actions\Book\TriggerBookEmbedding;
 use App\Actions\Book\UpdateBook;
 use App\Http\Requests\Book\BulkImportBooksRequest;
+use App\Http\Requests\Book\ChatWithBookRequest;
 use App\Http\Requests\Book\StoreBookRequest;
 use App\Http\Requests\Book\UpdateBookRequest;
 use App\Http\Resources\BookResource;
 use App\Jobs\BulkImportBooks;
 use App\Models\Book;
+use App\Services\OpenAiClient;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class BookController extends Controller
 {
@@ -92,5 +99,73 @@ class BookController extends Controller
         $deleteBook->execute($book);
 
         return response()->noContent();
+    }
+
+    public function embed(Book $book, TriggerBookEmbedding $triggerBookEmbedding): JsonResponse
+    {
+        $result = $triggerBookEmbedding->execute($book);
+
+        return response()->json(
+            ['embedding_status' => $result['status']],
+            $result['triggered'] ? 202 : 200,
+        );
+    }
+
+    public function chat(
+        ChatWithBookRequest $request,
+        Book $book,
+        RetrieveBookChunks $retrieveBookChunks,
+        OpenAiClient $openAi,
+    ): JsonResponse|StreamedResponse {
+        if ($book->embedding_status !== 'ready') {
+            return response()->json([
+                'message' => 'This book is not ready for chat yet.',
+                'embedding_status' => $book->embedding_status,
+            ], 422);
+        }
+
+        $message = $request->validated('message');
+        $chunks = $retrieveBookChunks->execute($book, $message);
+
+        $context = $chunks->isEmpty()
+            ? '(no relevant excerpts found)'
+            : $chunks->map(fn ($chunk) => "[Chapter {$chunk->chapter_index}]\n{$chunk->content}")->implode("\n\n---\n\n");
+
+        $systemPrompt = "You are a helpful assistant answering questions about the book \"{$book->title}\" by {$book->author}.\n"
+            ."Answer only using the excerpts below. If the excerpts don't contain enough information to answer\n"
+            ."confidently, say you don't know rather than guessing or inventing details.\n\n"
+            ."Excerpts:\n{$context}";
+
+        return response()->stream(function () use ($openAi, $systemPrompt, $message) {
+            try {
+                $openAi->streamChat([
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user', 'content' => $message],
+                ], function (string $delta) {
+                    echo 'data: '.json_encode(['delta' => $delta])."\n\n";
+                    $this->flushOutput();
+                });
+            } catch (Throwable $e) {
+                echo 'data: '.json_encode(['error' => 'The chat request failed.'])."\n\n";
+                $this->flushOutput();
+            }
+
+            echo "data: [DONE]\n\n";
+            $this->flushOutput();
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
+        ]);
+    }
+
+    protected function flushOutput(): void
+    {
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+
+        flush();
     }
 }

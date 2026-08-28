@@ -26,6 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/search', [BookController::class, 'search']);
     Route::get('/books/{book}', [BookController::class, 'show']);
     Route::get('/books/{book}/file', [BookController::class, 'file']);
+    Route::post('/books/{book}/embed', [BookController::class, 'embed']);
+    Route::post('/books/{book}/chat', [BookController::class, 'chat']);
 
     Route::get('/books/{book}/progress', [ReadingProgressController::class, 'show']);
     Route::patch('/books/{book}/progress', [ReadingProgressController::class, 'update']);

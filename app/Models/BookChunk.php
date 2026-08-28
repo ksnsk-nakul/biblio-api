@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Pgvector\Laravel\Vector;
 
 class BookChunk extends Model
 {
@@ -20,9 +21,13 @@ class BookChunk extends Model
         'embedding',
     ];
 
-    // NOTE: no cast wired for `embedding` yet — Pgvector\Vector doesn't implement
-    // Laravel's CastsAttributes contract, and embeddings aren't written/read until
-    // the RAG chat phase. Revisit when that phase lands.
+    protected function casts(): array
+    {
+        return [
+            'chapter_index' => 'integer',
+            'embedding' => Vector::class,
+        ];
+    }
 
     public function book(): BelongsTo
     {
