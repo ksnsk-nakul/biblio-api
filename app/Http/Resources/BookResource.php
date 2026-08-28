@@ -16,7 +16,7 @@ class BookResource extends JsonResource
             'author' => $this->author,
             'series_name' => $this->series_name,
             'volume_number' => $this->volume_number,
-            'cover_path' => $this->cover_path,
+            'cover_url' => $this->cover_path ? route('books.cover', $this->id) : null,
             'chapter_count' => $this->chapter_count,
             'embedding_status' => $this->embedding_status,
             'folder' => $this->whenLoaded('folder', fn () => new FolderResource($this->folder)),

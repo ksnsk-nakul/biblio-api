@@ -55,6 +55,26 @@ class BookController extends Controller
         ]);
     }
 
+    public function cover(Book $book): BinaryFileResponse
+    {
+        abort_if(! $book->cover_path, 404);
+
+        $mimeTypes = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+        ];
+
+        $extension = strtolower(pathinfo($book->cover_path, PATHINFO_EXTENSION));
+
+        return response()->file(Storage::disk('local')->path($book->cover_path), [
+            'Content-Type' => $mimeTypes[$extension] ?? 'application/octet-stream',
+            'Cache-Control' => 'public, max-age=86400, immutable',
+        ]);
+    }
+
     public function store(StoreBookRequest $request, IngestEpubBook $ingestEpubBook): BookResource
     {
         $book = $ingestEpubBook->execute($request->file('file'), (int) $request->validated('folder_id'));
