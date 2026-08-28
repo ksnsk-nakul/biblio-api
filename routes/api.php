@@ -10,7 +10,7 @@ use App\Http\Controllers\ShelfController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
 
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);

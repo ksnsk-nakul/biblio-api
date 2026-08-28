@@ -18,6 +18,7 @@ use App\Services\OpenAiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -146,6 +147,11 @@ class BookController extends Controller
                     $this->flushOutput();
                 });
             } catch (Throwable $e) {
+                Log::error('Book chat stream failed', [
+                    'book_id' => $book->id,
+                    'error' => $e->getMessage(),
+                ]);
+
                 echo 'data: '.json_encode(['error' => 'The chat request failed.'])."\n\n";
                 $this->flushOutput();
             }

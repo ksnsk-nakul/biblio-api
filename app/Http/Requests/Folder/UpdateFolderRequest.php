@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Folder;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateFolderRequest extends FormRequest
 {
@@ -15,7 +16,13 @@ class UpdateFolderRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:255'],
-            'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:folders,id'],
+            'parent_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'exists:folders,id',
+                Rule::notIn([$this->route('folder')?->id]),
+            ],
         ];
     }
 }

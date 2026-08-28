@@ -29,6 +29,19 @@ class BulkImportBooksRequest extends FormRequest
 
             if (! is_dir($directory) || ! is_readable($directory)) {
                 $validator->errors()->add('directory', 'The given directory does not exist or is not readable.');
+
+                return;
+            }
+
+            $realDirectory = realpath($directory);
+            $realBasePath = realpath(config('bibliocon.import_base_path'));
+
+            $withinBasePath = $realDirectory !== false
+                && $realBasePath !== false
+                && ($realDirectory === $realBasePath || str_starts_with($realDirectory, $realBasePath.DIRECTORY_SEPARATOR));
+
+            if (! $withinBasePath) {
+                $validator->errors()->add('directory', 'The given directory is outside the allowed import path.');
             }
         });
     }
