@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id',
     ];
 
     /**
@@ -44,5 +45,20 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function folders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Folder::class, 'created_by');
+    }
+
+    public function shelves(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Shelf::class);
+    }
+
+    public function readingProgress(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ReadingProgress::class);
     }
 }
